@@ -1,30 +1,40 @@
-ARG NODE_VERSION=20
-FROM n8nio/base:${NODE_VERSION}
+FROM node:alpine
 
-ARG N8N_VERSION
-RUN if [ -z "$N8N_VERSION" ] ; then echo "The N8N_VERSION argument is missing!" ; exit 1; fi
+ARG N8N_VERSION=latest
+ARG PGPASSWORD
+ARG PGHOST
+ARG PGPORT
+ARG PGDATABASE
+ARG PGUSER
 
-LABEL org.opencontainers.image.title="n8n"
-LABEL org.opencontainers.image.description="Workflow Automation Tool"
-LABEL org.opencontainers.image.source="https://github.com/n8n-io/n8n"
-LABEL org.opencontainers.image.url="https://n8n.io"
-LABEL org.opencontainers.image.version=${N8N_VERSION}
+ARG USERNAME
+ARG PASSWORD
+ARG ENCRYPTIONKEY
 
-ENV N8N_VERSION=${N8N_VERSION}
-ENV NODE_ENV=production
-ENV N8N_RELEASE_TYPE=stable
-RUN set -eux; \
-	npm install -g --omit=dev n8n@${N8N_VERSION} --ignore-scripts && \
-	npm rebuild --prefix=/usr/local/lib/node_modules/n8n sqlite3 && \
-	rm -rf /usr/local/lib/node_modules/n8n/node_modules/@n8n/chat && \
-	rm -rf /usr/local/lib/node_modules/n8n/node_modules/n8n-design-system && \
-	rm -rf /usr/local/lib/node_modules/n8n/node_modules/n8n-editor-ui/node_modules && \
-	find /usr/local/lib/node_modules/n8n -type f -name "*.ts" -o -name "*.js.map" -o -name "*.vue" | xargs rm -f && \
-	rm -rf /root/.npm
+ENV N8N_ENCRYPTION_KEY=$ENCRYPTIONKEY
+ENV DB_TYPE=postgresdb
+ENV DB_POSTGRESDB_DATABASE=$PGDATABASE
+ENV DB_POSTGRESDB_HOST=$PGHOST
+ENV DB_POSTGRESDB_PORT=$PGPORT
+ENV DB_POSTGRESDB_USER=$PGUSER
+ENV DB_POSTGRESDB_PASSWORD=$PGPASSWORD
 
-RUN \
-	mkdir .n8n && \
-	chown node:node .n8n
-ENV SHELL /bin/sh
-USER node
-ENTRYPOINT ["tini", "--", "/docker-entrypoint.sh"]
+ENV N8N_BASIC_AUTH_ACTIVE=true
+ENV N8N_BASIC_AUTH_USER=$USERNAME
+ENV N8N_BASIC_AUTH_PASSWORD=$PASSWORD
+
+ENV N8N_USER_ID=root
+
+RUN apk add --update graphicsmagick tzdata
+
+USER root
+
+RUN apk --update add --virtual build-dependencies python3 build-base && \
+    npm_config_user=root npm install --location=global n8n@${N8N_VERSION} && \
+    apk del build-dependencies
+
+WORKDIR /data
+
+EXPOSE $PORT
+
+CMD export N8N_PORT=$PORT && n8n start
